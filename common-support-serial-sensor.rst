@@ -29,7 +29,7 @@ Step 1: signs of life
 
 Given this device came with a USB-to-TTL adapter, checking for signs of life on my laptop seems a good start.  If your device does not come with one, they are not expensive, and having a drawful of them isn't too difficult to arrange.
 
-I used `screen` to connect to the device:
+I used `screen` to connect to the device: screen /dev/ttyUSB0 57600
 
 Yay!  Data is being received, and given this is a binary protocol, weird characters are all good.
 
@@ -38,7 +38,7 @@ Step 2: writing a parser on the desktop
 
 A next sensible step is to write a parser, in C++, to run on your desktop.  So long as you structure it appropriately, it should be transferable into the ArduPilot code when it becomes time to do that.
 
-Writing the parser to run on your desktop PC has the advantage that you can use all the modern tools for debugging the code - valgrind and gdb are obvious examples.
+Writing the parser to run on your desktop PC has the advantage that you can use all the modern tools for debugging the code - valgrind and gdb are popular examples.
 
 sds021.cpp contains an example program which opens the serial port, parses the stream and emits readings on stdout.
 
@@ -60,6 +60,25 @@ Sample output from the program:
 
 Step 3: moving the parser into ArduPilot
 ----------------------------------------
+Ardupilot splits the operation of most peripheral devices into a "function" driver,
+where data is manipulated to achieve the task that is wanted by a front end funtional library,
+and a lower level "communications" driver, which manages receiving and transmitting data.
+For peripherals possible to be called by more than one front end functional library, it may be
+better for the device driver layer to be further abstracted into a class driver with more than 
+one "function" driver calling it.
+In Ardupilot serialmanager.cpp manages the allocation and rates of serial ports.  At present there
+are 16 different serial settings which may be selected by the user to match the configuration of
+their vehicle.  When introducing a new serial device to Ardupilot, it is best to review
+serialmanager.cpp and if possible select an already implemented configuration.  You will need to 
+note down the specifics of this serial type, as it is needed to implement your parser into a function
+or class driver.
+Once you have identified and noted down the serial configuration, you then need to identify the front end
+functional library that best suits the purpose of your device.  These are found in the AP_Library folder in
+the Ardupilot codebase.  AP_Rangefinder is an example where a number of different devices provide optional
+back ends to the front end functional library.
+The naming convention is AP_libraryname_devicename
+
+
 
 Step 4: writing a SITL simulator for the device
 ------------------------------------------
