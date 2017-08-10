@@ -78,6 +78,19 @@ the Ardupilot codebase.  AP_Rangefinder is an example where a number of differen
 back ends to the front end functional library.
 The naming convention is AP_libraryname_devicename
 
+- create a git topic branch for your driver
+
+ ```
+pbarker@bluebottle:~/rc/ardupilot(master)$ git checkout -b sds021
+Switched to a new branch 'sds021'
+```
+
+There is no existing "ParticleSensor" frontend in ArduPilot, so I created one.  The frontend defines the access points to the lbirary, so must be generic enough to cover the possible use cases while staying as clean as possible.
+
+For the time being I decided supporting a single particle sensor would be sufficient.  Attempting to get the interface correct for multiple sensors would be adding extra work, and without another sample device would almost certainly be incorrect.
+
+The commits:
+"AP_ParticleSensor: support for particle sensors" creates the bare minimum required for a normal frontend/backend split.
 
 
 Step 4: writing a SITL simulator for the device
@@ -92,8 +105,17 @@ Step 6: testing the parser using SITL and a real device
 Step 7: dataflash logging
 -------------------------
 
-Step 8: sending the data to the GCS in real time
-------------------------------------------------
+Step 8: sending the data to the GCS in real time using MAVLink
+--------------------------------------------------------------
 
-Step 9: integration with the vehicle code
------------------------------------------
+Step 8.5: a MAVProxy module to display data received in real-time
+-----------------------------------------------------------------
+
+Step 9: integration with the vehicle code - "blood-hound mode"
+------------------------------------------------------------
+
+Step 10: integrating an EKF
+---------------------------
+
+Step 11: World Domination
+-------------------------
