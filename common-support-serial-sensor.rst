@@ -36,6 +36,10 @@ Yay!  Data is being received, and given this is a binary protocol, weird charact
 Step 2: writing a parser on the desktop
 ---------------------------------------
 
+.. note:
+
+   The repository https://github.com/peterbarker/sds021 contains the code references in this section.
+
 A next sensible step is to write a parser, in C++, to run on your desktop.  So long as you structure it appropriately, it should be transferable into the ArduPilot code when it becomes time to do that.
 
 Writing the parser to run on your desktop PC has the advantage that you can use all the modern tools for debugging the code - valgrind and gdb are popular examples.
@@ -48,56 +52,125 @@ Things to note about the structure of this program:
 
 Sample output from the program:
 
-20170725185026: PM1.0=9.4 PM2.5=3.9 (bad=0 cksum fails=0)
-20170725185027: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
-20170725185028: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
-20170725185029: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
-20170725185030: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
-20170725185031: PM1.0=8.6 PM2.5=3.8 (bad=0 cksum fails=0)
-20170725185032: PM1.0=8.5 PM2.5=3.7 (bad=0 cksum fails=0)
-20170725185033: PM1.0=8.5 PM2.5=3.6 (bad=0 cksum fails=0)
+::
 
+   20170725185026: PM1.0=9.4 PM2.5=3.9 (bad=0 cksum fails=0)
+   20170725185027: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   20170725185028: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   20170725185029: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   20170725185030: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   20170725185031: PM1.0=8.6 PM2.5=3.8 (bad=0 cksum fails=0)
+   20170725185032: PM1.0=8.5 PM2.5=3.7 (bad=0 cksum fails=0)
+   20170725185033: PM1.0=8.5 PM2.5=3.6 (bad=0 cksum fails=0)
 
-Step 3: moving the parser into ArduPilot
+Step 3: preparing to work with ArduPilot
 ----------------------------------------
-Ardupilot splits the operation of most peripheral devices into a "function" driver,
-where data is manipulated to achieve the task that is wanted by a front end funtional library,
-and a lower level "communications" driver, which manages receiving and transmitting data.
-For peripherals possible to be called by more than one front end functional library, it may be
-better for the device driver layer to be further abstracted into a class driver with more than 
-one "function" driver calling it.
-In Ardupilot serialmanager.cpp manages the allocation and rates of serial ports.  At present there
-are 16 different serial settings which may be selected by the user to match the configuration of
-their vehicle.  When introducing a new serial device to Ardupilot, it is best to review
-serialmanager.cpp and if possible select an already implemented configuration.  You will need to 
-note down the specifics of this serial type, as it is needed to implement your parser into a function
-or class driver.
-Once you have identified and noted down the serial configuration, you then need to identify the front end
-functional library that best suits the purpose of your device.  These are found in the AP_Library folder in
-the Ardupilot codebase.  AP_Rangefinder is an example where a number of different devices provide optional
-back ends to the front end functional library.
-The naming convention is AP_libraryname_devicename
 
-- create a git topic branch for your driver
+Follow the instructions at http://ardupilot.org/dev/docs/where-to-get-the-code.html to get a working ArduPilot development environment.
 
- ```
-pbarker@bluebottle:~/rc/ardupilot(master)$ git checkout -b sds021
-Switched to a new branch 'sds021'
-```
+Create a topic branch for your driver (e.g.):
 
-There is no existing "ParticleSensor" frontend in ArduPilot, so I created one.  The frontend defines the access points to the lbirary, so must be generic enough to cover the possible use cases while staying as clean as possible.
+::
 
-For the time being I decided supporting a single particle sensor would be sufficient.  Attempting to get the interface correct for multiple sensors would be adding extra work, and without another sample device would almost certainly be incorrect.
-
-The commits:
-"AP_ParticleSensor: support for particle sensors" creates the bare minimum required for a normal frontend/backend split.
-
+   git checkout -b sds021
 
 Step 4: writing a SITL simulator for the device
-------------------------------------------
+-----------------------------------------------
 
-Step 5: testing the parser using SITL
+Why a simulator?
+
+ - many developers can debug the driver
+ - changes to driver infrastructure can be tested
+ - cheaper to crash a simulated vehicle than a real vehicle
+ - faster than testing against a real device
+ - allows fake inputs from the fake device to test higher levels in the stack (e.g. "bloodhound mode" in this example)
+
+The SDS021 is a serially-connected device.  ArduPilot's SITL has the facility to specify these on the command-line.  The patch titled `SITL: add a simulated sds021 particle sensor` adds a simulated Particle Sensor.  You can attach a simulated device to SITL with a commandline option to `sim_vehicle.py`, and you should find debug information appearing on SITL's `stderr`.
+
+::
+
+  SIM connection ParticleSensor_SDS021:(null)
+
+
+At this point the simulated device's output looks nothing like the actual device output, it is a "skeleton" of what it will become.  So long as it makes some data available to the device driver we will be writing, it is sufficient; later patches will flesh it out.  At this stage it doesn't need to be pretty, only functional.
+
+
+
+Step 5: creating a driver skeleton
+----------------------------------
+
+.. note:
+
+   Ardupilot splits the operation of most peripheral devices into a
+   "function" driver, where data is manipulated to achieve the task that
+   is wanted by a front end funtional library, and a lower level
+   "communications" driver, which manages receiving and transmitting
+   data.  For peripherals possible to be called by more than one front
+   end functional library, it may be better for the device driver layer
+   to be further abstracted into a class driver with more than one
+   "function" driver calling it.
+
+Your first step is to choose a Frontend driver to create your serial device under.  Examples of Frontend drivers that have serial backends include:
+
+  - AP_RangeFinder
+  - AP_ADSB
+  - AP_GPS
+  - AP_PrecLand
+
+Choose a frontend that most closely matches the functionality of your device.
+
+Step 5a: creating a frontend/backend structure for a new device type
+....................................................................
+
+.. note:
+
+   if you have found a Frontend which matches your vehicle type you can skip this step!
+
+Since there was no existing "ParticleSensor" frontend in ArduPilot, I created one.  The frontend defines the access points to the library, so must be generic enough to cover the possible use cases while staying as clean as possible.
+
+.. note:
+
+   For the time being I decided supporting a single particle sensor would be sufficient.  Attempting to get the interface correct for multiple sensors would be adding extra work, and without another sample device would almost certainly be incorrect.
+
+The commit `AP_ParticleSensor: support for particle sensors` shows the creation of the frontend/backend structure.  Note that at this point there's no method to retrieve the data through the interface - that comes later!  The methods implemented in this commit are the bare minimum for a working driver.
+
+Step 5b: creating the skeleton backend driver
+.............................................
+
+The commit `SerialManager: add SDS021 serial protocol` adds a unique identifier for the SDS021 protocol.  This number is used by the user to specify the protocol to be spoken on any particular UART.  This is done by setting a `SERIALn_PROTOCOL` - in this tutorial `SERIAL4_PROTOCOL` is the relevant parameter.  So, in this case, the user will need to set `SERIAL4_PROTOCOL` to 14 to enabble the SDS021 particle sensor driver on the simulated uartE port.
+
+The commit `AP_ParticleSensor: support for sds021 particle sensors` adds a skeleton backend driver for the SDS021 particle sensor.
+
+The important parts of this commit are:
+
+  - add detection of the serial device in the frontend's `init` function.  Note that this uses the enumeation value created in the previous commit.
+  - a constructor which takes a reference to the serial port UARTDriver
+  - port setup (note that in this case the driver is ignoring the other SERIALn_PARAMETERS as the actual physical device can not be reconfigured)
+  - an `update()` function which is periodically called by the frontend, and is responsible for parsing input from the device (n.b. this must be fast!  Challenge/response protocols must be done in separate steps.  Fast in this instance means hundreds of microseconds)
+  - an `update()` method which (for the time being) simply emits the characters being received from the device
+
+Step 6: Adding the driver to a vehicle
+--------------------------------------
+
+`Rover: AP_ParticleSensor support` adds the ParticleSensor frontend to the Rover vehicle.
+
+Important parts of the patch are:
+
+  - having Rover's scheduler call the ParticleSensor frontend's update function at 10Hz
+  - Declaration of the ParticleSensor frontend
+  - A `#define` which enabled or disabled the feature at compile-time
+  - a call to the `init` function of the ParticleSensor frontend; the frontend callsthe backend `init` functions
+  - Addition to the ArduPilot build systems
+
+Step 7: testing the parser using SITL
 -------------------------------------
+
+At this point there is sufficient structure to test that the simulated device and the device driver can talk to one-another.
+
+::
+
+   ./Tools/autotest/sim_vehicle.py -v APMrover2 --gdb --debug -A --uartE=sim:ParticleSensor_SDS021:
+
 
 Step 6: testing the parser using SITL and a real device
 -------------------------------------------------------
@@ -108,11 +181,17 @@ Step 7: dataflash logging
 Step 8: sending the data to the GCS in real time using MAVLink
 --------------------------------------------------------------
 
+Step 8.25: creating a simple autotest test
+------------------------------------------
+
 Step 8.5: a MAVProxy module to display data received in real-time
 -----------------------------------------------------------------
 
 Step 9: integration with the vehicle code - "blood-hound mode"
 ------------------------------------------------------------
+
+Step 10: Contributing the code back to the ArduPilot community
+--------------------------------------------------------------
 
 Step 10: integrating an EKF
 ---------------------------
