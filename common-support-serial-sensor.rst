@@ -171,9 +171,59 @@ At this point there is sufficient structure to test that the simulated device an
 
    ./Tools/autotest/sim_vehicle.py -v APMrover2 --gdb --debug -A --uartE=sim:ParticleSensor_SDS021:
 
+.. note:
 
-Step 6: testing the parser using SITL and a real device
+   Remember you must set the SERIALn_PROTOCOL parameter to enable the driver!
+
+All going well, when you run the above the ParticleSensor driver should report:
+
+::
+
+   SIM connection ParticleSensor_SDS021:(null)
+   SDS021: 4393: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   SDS021: 4493: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   SDS021: 4893: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   SDS021: 5892: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   SDS021: 6893: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   SDS021: 7892: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   SDS021: 8893: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   SDS021: 9892: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+   SDS021: 10893: PM1.0=8.7 PM2.5=3.9 (bad=0 cksum fails=0)
+
+on the console.
+
+Step 8: testing the parser using SITL and a real device
 -------------------------------------------------------
+
+After step 7 our driver is reading from a simulated device which should be speaking the same protocol as the real device.  SITL allows you to make the simple substitution of a real device for that fake device!
+
+When I plug the real device into my laptop I get a serial device:
+
+::
+
+   pbarker@bluebottle:~/rc/ardupilot(sds021)$ ls -l /dev/serial/by-id/*
+   lrwxrwxrwx 1 root root 13 Sep  6 16:05 /dev/serial/by-id/usb-1a86_USB2.0-Serial-if00-port0 -> ../../ttyUSB0
+   pbarker@bluebottle:~/rc/ardupilot(sds021)$ 
+
+This device can be passed into SITL in place of our fake device:
+
+::
+
+   DEVICE=/dev/serial/by-id/usb-1a86_USB2.0-Serial-if00-port0
+   ./Tools/autotest/sim_vehicle.py -v APMrover2 --gdb --debug -A --uartE=uart:$DEVICE
+
+This should produce output which is analagous to the simulator - but with real numbers!
+
+::
+
+   Opened /dev/serial/by-id/usb-1a86_USB2.0-Serial-if00-port0
+   SDS021: 4393: PM1.0=1.1 PM2.5=1.0 (bad=0 cksum fails=0)
+   SDS021: 4793: PM1.0=1.1 PM2.5=1.0 (bad=0 cksum fails=0)
+   SDS021: 5692: PM1.0=1.1 PM2.5=1.0 (bad=0 cksum fails=0)
+   SDS021: 6693: PM1.0=1.1 PM2.5=1.0 (bad=0 cksum fails=0)
+   SDS021: 7692: PM1.0=1.1 PM2.5=1.0 (bad=0 cksum fails=0)
+
+Naturally these diagnostics will be removed before any pull request against ArduPilot is issued, but printf debugging is still a valid technique!
 
 Step 7: dataflash logging
 -------------------------
@@ -192,6 +242,12 @@ Step 9: integration with the vehicle code - "blood-hound mode"
 
 Step 10: Contributing the code back to the ArduPilot community
 --------------------------------------------------------------
+
+Another Step 10: Using guided mode based on sensor data gathered in a CC
+------------------------------------------------------------------------
+
+Using data gathered directly a companion computer, guided mode is used
+via dronekit-python to move the vehicle around
 
 Step 10: integrating an EKF
 ---------------------------
