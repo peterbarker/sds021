@@ -134,6 +134,10 @@ Since there was no existing "ParticleSensor" frontend in ArduPilot, I created on
 
 The commit `AP_ParticleSensor: support for particle sensors` shows the creation of the frontend/backend structure.  Note that at this point there's no method to retrieve the data through the interface - that comes later!  The methods implemented in this commit are the bare minimum for a working driver.
 
+.. note:
+
+   Note the format of the commit message; it is important to start with a label for the relevant top-level directory to conform to ArduPilot project standards.  More information on the project standards can be found <linky>
+
 Step 5b: creating the skeleton backend driver
 .............................................
 
@@ -225,11 +229,72 @@ This should produce output which is analagous to the simulator - but with real n
 
 Naturally these diagnostics will be removed before any pull request against ArduPilot is issued, but printf debugging is still a valid technique!
 
-Step 7: dataflash logging
+Step 9: dataflash logging
 -------------------------
+
+So after step 8 we're happily collecting data from our sensor.  All very well and good, but it is awfully ephemeral.  At the very least we should store the data for later analysis.
+
+By storing the data in ArduPilot's DataFlash logs it can be correlated and analysed along with all of the other data present in there - for example, the vehicle's position and attitude.
+
+The simplest way to store data in the DataFlash logs is to use its "Log_Write" method:
+
+::
+
+   const uint64_t now = AP_HAL::micros64();
+   df->Log_Write("S021", "TimeUS,pm10,pm25", "Qhh", now, reading.pm10, reading.pm25);
+
+The important things to note about this:
+ - the name must be less than 4 characters in length and not clash with another name.  By convention all upper-case letters are used.
+ - TimeUS, by convention, is always the first field in the message
+ - the third argument specifies the amount of storage required in the log for each field; these types can be found in libraries/DataFlash/LogStructure.h
+
+The patch entitled "ParticleSensor_SDS021: add dataflash logging" adds logging for the SDS021 driver.
+
+After arming the SITL simulated Rover, the associated dataflash log contains our S021 message:
+
+::
+
+   pbarker@bluebottle:~/rc/ardupilot(sds021)$ mavlogdump.py logs/00000001.BIN  --t S021
+   2017-09-06 16:51:48.07: S021 {TimeUS : 34892704, pm10 : 87, pm25 : 39}
+   2017-09-06 16:51:49.08: S021 {TimeUS : 35893137, pm10 : 87, pm25 : 39}
+   2017-09-06 16:51:50.07: S021 {TimeUS : 36892737, pm10 : 87, pm25 : 39}
+   2017-09-06 16:51:51.08: S021 {TimeUS : 37893170, pm10 : 87, pm25 : 39}
+   2017-09-06 16:51:52.07: S021 {TimeUS : 38892770, pm10 : 87, pm25 : 39}
+   2017-09-06 16:51:53.08: S021 {TimeUS : 39893203, pm10 : 87, pm25 : 39}
+   2017-09-06 16:51:54.07: S021 {TimeUS : 40892803, pm10 : 87, pm25 : 39}
+   pbarker@bluebottle:~/rc/ardupilot(sds021)$ 
+
+Analysis of these logs is currently beyond the scope of this tutorial, however you can find more information <linky>
+
+Step 10: fleshing out the frontend
+----------------------------------
+
+At this point our frontend has a single method, `update()` which 
+
+Before we send a mavlink message we should probably get our frontend/backend split in order.  At the moment we don't pass any data back to to the frontend.  We need to fix that, because while we can get away with a DataFlash message specific to our sensor, a MAVLink message should be able to handle a more general case.
+
+Let's assume that particle sensors produce a simple uint16_t count for a specific particle size, and that many different particle sizes might need to be supported.  In this case we want to frontend to be able to ask the backend what reading it has for particles of a particular size.
+
+Thankfully in this serial driver we don't need to worry about locking; the entire driver runs on ArduPilot's main thread.  If the driver's "update" routine was called from a different thread (as they typically are in i2c drivers), then we would need to worry about copying data from "backend to frontend" - copying data from one thread's variables to another, essentially.
+
+So an interface where if the frontend is asked for a particle count at a particular size then it simply asks its only backend the same question seems reasonable.  The backend will get a pure virtual 
+
+
+
 
 Step 8: sending the data to the GCS in real time using MAVLink
 --------------------------------------------------------------
+
+Post-analysis of dataflash logs is great (they contain a lot of data at very fine-grained intervals), but sometimes having the data available on a Ground Control Station in real-time would be avantageous.
+
+Data is transfered to Ground Control Stations using the MAVLink protocol.  This is a formally defined protocol with fixed fields and abundant checksumming.  You can read more about MAVLink <linky>.
+
+Step 9: adding a tests directory
+--------------------------------
+
+Step 9: adding an examples directory
+--------------------------------
+
 
 Step 8.25: creating a simple autotest test
 ------------------------------------------
@@ -248,6 +313,9 @@ Another Step 10: Using guided mode based on sensor data gathered in a CC
 
 Using data gathered directly a companion computer, guided mode is used
 via dronekit-python to move the vehicle around
+
+Yet Another Step 10: returning data to GCS from the companion computer
+----------------------------------------------------------------------
 
 Step 10: integrating an EKF
 ---------------------------
