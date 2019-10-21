@@ -246,7 +246,7 @@ The simplest way to store data in the DataFlash logs is to use its "Log_Write" m
 The important things to note about this:
  - the name must be less than 4 characters in length and not clash with another name.  By convention all upper-case letters are used.
  - TimeUS, by convention, is always the first field in the message
- - the third argument specifies the amount of storage required in the log for each field; these types can be found in libraries/DataFlash/LogStructure.h
+ - the third argument specifies the amount of storage required in the log for each field; these types can be found in libraries/DataFlash/LogStructure.h; ensure there are enough format specifiers in this field to cover the number of fields you have!
 
 The patch entitled "ParticleSensor_SDS021: add dataflash logging" adds logging for the SDS021 driver.
 
